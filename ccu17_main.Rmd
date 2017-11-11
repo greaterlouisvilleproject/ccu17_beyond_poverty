@@ -1,0 +1,704 @@
+---
+title: "CCU17"
+output: github_document
+---
+
+# Using ACS Microdata
+
+Loading libraries
+```{r libraries, message = FALSE}
+library(ggthemes)
+library(classInt)
+library(showtext)
+library(feather)
+library(survey)
+library(tidyverse)
+```
+
+Pull Peers Function
+```{r}
+pull_peers_MSA<-function(data){
+  all.peers <- filter(data, data$MSA %in% c("24340", "41180", "36420", "46140", "24860", "28940", "13820", "26900", "31140", "28140", "36540", "24660", "16740", "18140", "17140", "34980", "32820", "27260", "39580", "19380", "40060"))
+  
+  # all.peers <- filter(data, data$MSA == 24340 | data$MSA == 41180
+  #                   |data$MSA == 36420 | data$MSA == 46140
+  #                   |data$MSA == 24860 |data$MSA == 28940
+  #                   |data$MSA == 13820 |data$MSA == 26900
+  #                   |data$MSA == 31140 |data$MSA == 28140
+  #                   |data$MSA == 36540 |data$MSA == 24660
+  #                   |data$MSA == 16740 |data$MSA == 18140
+  #                   |data$MSA == 17140 |data$MSA == 34980
+  #                   |data$MSA == 32820 |data$MSA == 27260
+  #                   |data$MSA == 39580 |data$MSA == 19380
+  #                   |data$MSA == 40060)
+  
+  
+  all.peers$baseline<-1
+  all.peers$current<-1
+  all.peers$baseline[all.peers$MSA == 24340 | all.peers$MSA == 41180
+                     |all.peers$MSA == 36420 | all.peers$MSA == 46140
+                     |all.peers$MSA == 24860 | all.peers$MSA == 28940]<-0
+  all.peers$current[all.peers$MSA == 27260 | all.peers$MSA == 39580
+                    |all.peers$MSA == 19380 | all.peers$MSA == 40060]<-0
+  all.peers
+}
+```
+
+## Code used to cut down dataset
+
+The initial data comes from an IPUMS download which covers the whole U.S. I include the code I used to cut it down to the peer cities. The dataframe was called mpi_msa
+
+Giving TULSA PUMAs the TULSA MSA. TULSA's PUMAs are not a 90%+ match for the TULSA MSA, so IPUMS does not include them. However, for the sake of our analysis we'll accept the geographical imprecision. The area included is larger than the TULSA MSA. 
+```{r, eval = FALSE}
+mpi_msa$MET2013[mpi_msa$PUMA == 100]  <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 1201] <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 1202] <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 1203] <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 1204] <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 1301] <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 1302] <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 1501] <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 1601] <- 46140
+```
+
+Only Peer cities and only individuals not in group quarters (this is a normal exclusion made by factfinder as well). I am also cutting to just 2015, as the other two years aren't used. 
+```{r, eval = FALSE}
+mpi_msa <- mpi_msa %>% rename(MSA = MET2013)
+mpi_msa <- pull_peers_MSA(mpi_msa)
+mpi_msa <- mpi_msa %>% filter((GQ == 1 | GQ == 2) & YEAR == 2015)
+```
+
+## Microdata analysis
+
+Reading in data
+```{r}
+mpi_msa <- read_feather("peer_acs_micro.feather")
+```
+
+Matching FIPS numbers to recognizable names. 
+```{r}
+mpi_msa$city<-NA
+mpi_msa$city[mpi_msa$MSA == 24340] = "Grand Rapids"
+mpi_msa$city[mpi_msa$MSA == 41180] = "St. Louis"
+mpi_msa$city[mpi_msa$MSA == 36420] = "Oklahoma City"
+mpi_msa$city[mpi_msa$MSA == 46140] = "Tulsa"
+mpi_msa$city[mpi_msa$MSA == 24860] = "Greenville"
+mpi_msa$city[mpi_msa$MSA == 28940] = "Knoxville"
+mpi_msa$city[mpi_msa$MSA == 13820] = "Birmingham"
+mpi_msa$city[mpi_msa$MSA == 31140] = "Louisville"
+mpi_msa$city[mpi_msa$MSA == 26900] = "Indianapolis"
+mpi_msa$city[mpi_msa$MSA == 28140] = "Kansas City"
+mpi_msa$city[mpi_msa$MSA == 36540] = "Omaha"
+mpi_msa$city[mpi_msa$MSA == 24660] = "Greensboro"
+mpi_msa$city[mpi_msa$MSA == 16740] = "Charlotte"
+mpi_msa$city[mpi_msa$MSA == 18140] = "Columbus"
+mpi_msa$city[mpi_msa$MSA == 17140] = "Cincinnati"
+mpi_msa$city[mpi_msa$MSA == 34980] = "Nashville"
+mpi_msa$city[mpi_msa$MSA == 32820] = "Memphis"
+mpi_msa$city[mpi_msa$MSA == 27260] = "Jacksonville"
+mpi_msa$city[mpi_msa$MSA == 39580] = "Raleigh"
+mpi_msa$city[mpi_msa$MSA == 19380] = "Dayton"
+mpi_msa$city[mpi_msa$MSA == 40060] = "Richmond"
+```
+
+
+Generating an indicator variable for whether or not the household has a child. This will allow me to subset to only households with children. (Rather than subsetting to only children).
+
+```{r household has a child}
+mpi_msa <- mpi_msa %>%
+group_by(SERIAL, YEAR) %>%
+   mutate(has_child = if_else(any(AGE < 18), 1, 0))
+```
+
+The income poverty indicator is straightforward and is the same for all members of the household. The ACS data already contains a poverty indicator showing percent of poverty line for all households. I recode this as a binary variable such that households are poor (1) or not poor (0)
+
+I also filter out Group Quarters. 
+```{r income}
+mpi_msa$FTOTINC[mpi_msa$FTOTINC == 9999999] <- NA
+
+mpi_msa$income_poverty = if_else(mpi_msa$POVERTY <= 100, 1, 0)
+```
+
+Family employment is also assigned at the household level. If no one in the family is employed, then the family is initially considered employment deprived. However, if anyone in the family has retirement income, or investment income in excess of $25,000, or if the family lives on a working farm, then the family is not considered employment deprived. 
+```{r employment, message = FALSE}
+mpi_msa$INCINVST[mpi_msa$INCINVST == 999999] <- 0
+mpi_msa$INCRETIR[mpi_msa$INCRETIR == 999999] <- 0
+
+mpi_msa = mpi_msa %>%
+  mutate(emp_num = if_else(EMPSTAT == 1, 1, 0)) %>%
+  group_by(SERIAL, YEAR) %>%
+   mutate(retired = if_else(any(INCRETIR > 20900), 1, 0),
+         investment = if_else(any(INCINVST > 20900), 1, 0),
+         fam_emp = if_else(any(emp_num ==1)|any(retired ==1)|any(investment == 1)|FARM == 2, 0, 1))
+
+```
+
+A dichotomous variable for if anyone in the household has an associate's degree or higher
+```{r education, message = FALSE}
+mpi_msa = mpi_msa %>%
+  group_by(SERIAL, YEAR) %>%
+  mutate(fam_edu = if_else(any(EDUCD > 80), 0, 1))
+
+```
+
+A dichotomous variable for if anyone in the household has a high school degree or higher
+```{r hs education, message = FALSE}
+mpi_msa = mpi_msa %>%
+  group_by(SERIAL, YEAR) %>%
+  mutate(fam_no_hs_edu = if_else(any(EDUCD > 61), 0, 1))
+
+```
+
+Health insurance is assigned at the individual level. Some members of the household may have health insurance, while others do not. Children are more likely to have health insurance than adults. 
+```{r health, message = FALSE}
+mpi_msa$health = if_else(mpi_msa$HCOVANY == 2, 0, 1)
+```
+
+Education
+```{r}
+mpi_msa$education = if_else(mpi_msa$EDUCD < 62 & mpi_msa$AGE > 18 & mpi_msa$EDUCD !=1, 1, 0) #less than hs, over 18, not NA
+
+mpi_msa$grade_recode = NA ##where GRADEATTD == 0, it stays NA, everywhere else it changes. 0 is NA in GRADEATTD codebook
+mpi_msa$grade_recode[mpi_msa$GRADEATTD < 30 & mpi_msa$GRADEATTD != 0] = 0
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 30] = 4
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 31] = 1
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 32] = 2
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 33] = 3
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 34] = 4
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 40] = 8
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 41] = 5
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 42] = 6
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 43] = 7
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 44] = 8
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 50] = 12
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 51] = 9
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 52] = 10
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 53] = 11
+mpi_msa$grade_recode[mpi_msa$GRADEATTD == 54] = 12
+mpi_msa$grade_recode[mpi_msa$GRADEATTD > 59] = 120
+
+mpi_msa$education[mpi_msa$AGE < 19 & ((mpi_msa$GRADEATTD+6) < mpi_msa$AGE)] = 1 ##If age is more than 6 years above grade level
+```
+
+## Housing Quality
+
+#### Overcrowding
+Overcrowding is assigned at the household level. The individuals in the household are assigned the status of overcrowded if there are more than two people per bedroom. 
+```{r overcrowding, message = FALSE}
+mpi_msa = mpi_msa %>%
+  group_by(SERIAL, YEAR) %>%
+  mutate(hhsize = n())
+           
+mpi_msa$overcrowd = if_else(mpi_msa$hhsize > 2*mpi_msa$BEDROOMS, 1, 0)
+```
+
+#### Housing costs
+Houses are considered cost burdened at above 30% of total income and severely cost burdened at over 50% of total income. Here I follow Dhongde and Haveman 2016 in using severe cost burden as the indicator. 
+```{r}
+mpi_msa$OWNCOST[mpi_msa$OWNCOST == 99999] <- NA
+mpi_msa$FTOTINC[mpi_msa$FTOTINC == 99999] <- NA
+
+mpi_msa$hcost <- apply(mpi_msa[ ,c("OWNCOST", "RENTGRS")], 1, max, na.rm = TRUE)
+mpi_msa$hcost_dep <- if_else(mpi_msa$hcost*12/mpi_msa$FTOTINC > .50, 1, 0) # HUD uses 50% as severe cost burdened
+mpi_msa$hcost_dep[is.na(mpi_msa$hcost_dep)] <- 0
+
+mpi_msa$rent <- if_else(mpi_msa$RENTGRS > 0 & is.na(mpi_msa$OWNCOST), 1, 0) 
+
+```
+
+
+```{r}
+mpi_msa$percent_housing <- (mpi_msa$hcost*12)/mpi_msa$FTOTINC
+```
+
+#### Internet/Computer Access
+Internet access is assigned at the household level. A household is considered deprived if there is either no internet access, or there is none of the following computer equipment: laptop, desktop, notebook, smartphone, other computer equipment (not including GPS or household appliances). 
+```{r internet}
+mpi_msa$computer_internet <- if_else(mpi_msa$CINETHH == 3|(mpi_msa$CILAPTOP == 2 & mpi_msa$CIHAND == 2 & mpi_msa$CIOTHCOMP == 2), 1, 0)
+
+```
+
+Setting transit time of 0 to NA for later calculations
+```{r transit time}
+mpi_msa$TRANTIME[mpi_msa$TRANTIME == 0] <- NA
+```
+
+And indicator variable for if the family is both in poverty and has at least one person working.
+```{r poor and working}
+mpi_msa$poor_and_working = if_else(mpi_msa$income_poverty == 1 & mpi_msa$fam_emp == 0, 1, 0)
+```
+
+Creating a dataframe with one entry per household. (Note: remember to use HHWT instead of PERWT when creating survey weights for this.)
+```{r}
+mpi_hhold <- subset(mpi_msa, !duplicated(SERIAL))
+```
+
+```{r custom not-in function}
+`%!in%` <- negate(`%in%`)
+```
+
+Setting up survey objects of both individuals and households for current peer cities
+```{r}
+mpi_msa_current <- mpi_msa %>% 
+  filter(MSA %!in% c("27260", "39580", "19380", "40060"))
+
+mpi_hhold_current <- mpi_hhold %>% 
+  filter(MSA %!in% c("27260", "39580", "19380", "40060"))
+
+
+mpi_msa_svy <- svydesign(ids = ~1, weights = ~PERWT, data = mpi_msa_current)
+mpi_msa_svy_ch <- subset(mpi_msa_svy, AGE < 18)
+mpi_msa_svy_ch_pov <- subset(mpi_msa_svy_ch, income_poverty == 1)
+mpi_msa_svy_ch_no_pov <- subset(mpi_msa_svy_ch, income_poverty == 0)
+mpi_msa_svy_ch_wp <- subset(mpi_msa_svy_ch_pov, fam_emp == 1)
+
+mpi_hhold_svy <- svydesign(ids = ~1, weights = ~HHWT, data = mpi_hhold_current)
+mpi_hhold_svy_pov <- subset(mpi_hhold_svy, income_poverty == 1)
+mpi_hhold_svy_ch <- subset(mpi_hhold_svy, has_child == 1)
+mpi_hhold_svy_ch_pov <- subset(mpi_hhold_svy_ch, income_poverty == 1)
+mpi_hhold_svy_ch_no_pov <- subset(mpi_hhold_svy_ch, income_poverty == 0)
+mpi_hhold_svy_ch_wp <- subset(mpi_hhold_svy_ch_pov, fam_emp == 1)
+```
+
+Start adding svyby data here and then later merge all of those tables together before graphing. 
+```{r}
+mpi_lou_hhold_svy_ch_pov <- subset(mpi_hhold_svy_ch_pov, city == "Louisville")
+
+income_ch_pov_df <- svyby(~FTOTINC, ~city, design = mpi_msa_svy_ch_pov, svyquantile, quantiles = .5, ci = TRUE, na.rm = TRUE)
+
+hcost_ch_pov_df <- svyby(~hcost_dep, ~city, design = mpi_msa_svy_ch_pov, svymean, na.rm = TRUE)
+hcost_ch_pov_and_no_pov_df <- svyby(~hcost_dep, ~city+income_poverty, design = mpi_msa_svy_ch, svymean, na.rm = TRUE)
+
+hcost_per_ch_df <- svyby(~percent_housing, ~city+income_poverty, design = mpi_hhold_svy_ch, svyquantile, quantiles = .5, ci = TRUE, na.rm = TRUE)
+hcost_per_ch_df <- hcost_per_ch_df %>%
+  select(city, income_poverty, percent_housing) %>%
+  spread(key = income_poverty, value = percent_housing) %>%
+  rename(poor_per_housing = `1`, not_poor_per_housing = `0`) %>%
+  mutate(ratio_housing_gap = poor_per_housing / not_poor_per_housing)
+
+
+income_hhold_ch_pov_df <- svyby(~FTOTINC, ~city, design = mpi_hhold_svy_ch_pov, svyquantile, quantiles = .5, ci = TRUE, na.rm = TRUE)
+income_hhold_ch_pov_df <- income_hhold_ch_pov_df  %>% rename(median_hhold_income_child = FTOTINC)
+
+income_hhold_pov_df <- svyby(~FTOTINC, ~city, design = mpi_hhold_svy_pov, svyquantile, quantiles = .5, ci = TRUE, na.rm = TRUE)
+income_hhold_pov_df <- income_hhold_pov_df  %>% rename(median_hhold_income_all = FTOTINC)
+
+educ_ch_pov_df <- svyby(~fam_edu, ~city+income_poverty, design = mpi_msa_svy_ch, svymean) 
+educ_ch_pov_df <- educ_ch_pov_df %>%
+  select(city, income_poverty, fam_edu) %>%
+  spread(key = income_poverty, value = fam_edu) %>%
+  rename(poor_no_assoc = `1`, not_poor_no_assoc = `0`)
+
+educ_no_hs_ch_pov_df <- svyby(~fam_no_hs_edu, ~city+income_poverty, design = mpi_msa_svy_ch, svymean) 
+educ_no_hs_ch_pov_df <- educ_no_hs_ch_pov_df %>%
+  select(city, income_poverty, fam_no_hs_edu) %>%
+  spread(key = income_poverty, value = fam_no_hs_edu) %>%
+  rename(poor_no_hs = `1`, not_poor_no_hs = `0`)
+
+```
+
+Merging into just one dataframe
+```{r}
+graph_df <- left_join(income_ch_pov_df, income_hhold_ch_pov_df, by = "city")
+graph_df <- left_join(graph_df, income_hhold_pov_df, by = "city")
+graph_df <- left_join(graph_df, educ_ch_pov_df, by = "city")
+graph_df <- left_join(graph_df, educ_no_hs_ch_pov_df, by = "city")
+graph_df <- left_join(graph_df, hcost_ch_pov_df, by = "city")
+graph_df <- left_join(graph_df, hcost_per_ch_df, by = "city")
+
+rescale <- function(x){new_value <- x*100}
+graph_df[ ,c(8:15)] = apply(graph_df[ ,c(8:15)], 2, rescale)
+```
+
+```{r rank graph function}
+rank_and_nb_group<-function(df, var, order="Descending",
+                            plot_title="", y_title = "Percent", caption_text = "",
+                            sigfig = 3, num_dec = 1, text = TRUE, h_line = FALSE){
+  df$var <- df[[var]]
+  if(order=="Descending"){
+    d.order<-df[order(-df$var),]
+  }
+  if(order=="Ascending"){
+    d.order<-df[order(df$var),]
+  }
+  ranks<-1:length(df$var)
+  d.rank<-cbind(d.order,ranks)
+  names<-paste(d.rank$ranks,".",sep="")
+  names<-paste(names,d.rank$city)
+  d.graph<-cbind(d.rank,names)
+  
+  breaks <- classIntervals(d.graph$var,3,style="jenks")
+  d.graph$color <- NA
+  d.graph$color[d.graph$var<=breaks$brks[2]] <- "green"
+  d.graph$color[d.graph$var>breaks$brks[2] & d.graph$var<=breaks$brks[3]] <- "yellow"
+  d.graph$color[d.graph$var>breaks$brks[3]] <- "red"
+  d.graph$round <- format(round(signif(d.graph$var, digits = sigfig), digits = num_dec))
+  d.graph$textfont <- "Museo Sans 300"
+  d.graph$textfont[d.graph$city == "Louisville"] <- "Museo Sans 300 Italic"
+  d.graph$linecolor <- "white"
+  d.graph$linecolor[d.graph$city == "Louisville"] <- "#00a9b7"
+  d.graph$textcolor <- "black"
+  d.graph$textcolor[d.graph$city == "Louisville"] <- "#00a9b7"
+  
+  
+  p <- ggplot(data=d.graph,aes(x=factor(names, levels=rev(unique(names))),
+                               y=var,fill=factor(color)))+guides(fill=FALSE)
+  p <- p+geom_bar(stat="identity",color=rev(d.graph$linecolor), size = 1)+coord_flip()+theme_tufte()
+  if(order=="Ascending"){
+    p <- p+scale_fill_manual(values=c("#96ca4f","#db2834","#ffd600"))
+  }
+  if(order=="Descending"){
+    p <- p+scale_fill_manual(values=c("#db2834","#96ca4f","#ffd600"))
+  }
+  p <- p + theme(text = element_text(family = "Museo Sans 300"),
+                 plot.title = element_text(size = 18, hjust = 0.5),
+                 axis.text.y=element_text(hjust=0, family = rev(d.graph$textfont),
+                                          size=12, color = rev(d.graph$textcolor)),
+                 axis.ticks=element_blank(),
+                 axis.text.x = element_blank(),
+                 plot.caption = element_text(),
+                 plot.subtitle = element_text(hjust = 0.5))
+  if (text == TRUE) {
+    p <-
+      p + geom_text(
+        aes(label = round),
+        hjust = 1.1,
+        size = 5,
+        family = "Museo Sans 300"
+      )
+  }
+  if (h_line == TRUE){
+    p <- p + geom_hline(yintercept = 0, linetype = "longdash", size = 1)
+  }
+  p <- p+labs(title = plot_title, y= y_title,
+              x = "", caption = caption_text)
+  p
+}
+
+```
+
+Adding fonts
+```{r font add}
+font.add("Museo Sans 300", "C:/Users/natek/studio_gdrive/GLP/fonts/MuseoSans_300.otf")
+font.add("Museo Sans Italic", "C:/Users/natek/studio_gdrive/GLP/fonts/MuseoSans_300_Italic.otf")
+
+```
+
+Writing images
+```{r images}
+
+jpeg("images/ccu17_median_hhold_income_poor_ch.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group(graph_df, "median_hhold_income_child", order = "Descending",
+                  plot_title = "Median income of households with children in poverty, 2015",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
+showtext.end()
+dev.off()
+
+jpeg("images/ccu17_poor_no_assoc.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group(graph_df, "poor_no_assoc", order = "Ascending",
+                  plot_title = "Children in poverty in households where no one has \nan associate's degree or higher, 2015",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
+showtext.end()
+dev.off()
+
+jpeg("images/ccu17_poor_no_hs.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group(graph_df, "poor_no_hs", order = "Descending",
+                  plot_title = "Children in poverty in households where no one has \na high school degree or equivalent, 2015",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
+showtext.end()
+dev.off()
+
+jpeg("images/ccu17_median_poor_hhold_all.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group(graph_df, "median_hhold_income_all", order = "Descending",
+                  plot_title = "Median Income of Households in Poverty, 2015",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
+showtext.end()
+dev.off()
+
+jpeg("images/ccu17_housing_burden_poor_ch.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group(graph_df, "hcost_dep", order = "Ascending",
+                  plot_title = "Poor children in families paying over half their income \nin housing costs, 2015",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
+showtext.end()
+dev.off()
+
+jpeg("images/ccu17_percent_on_housing.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group(graph_df, "ratio_housing_gap", order = "Ascending",
+                  plot_title = "Ratio of median percent of income spent on housing \nby households in poverty with children\n and households not in poverty, 2015",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
+showtext.end()
+dev.off()
+```
+
+# College and Career Ready
+
+```{r}
+df_kde <- read_csv("kde1516.csv",
+               col_types = cols(
+                 NBR_GRADUATES_WITH_DIPLOMA = col_integer()
+               )) #kde1516 was previously pulled by hand/excel
+
+df_jeff <- read_csv("jeffcograds.csv")
+```
+
+```{r}
+df__jeff_clean <- df_jeff %>%
+  filter(DISAGG_LABEL == "All Students" | DISAGG_LABEL == "Free/Reduced-Price Meals") %>%
+  
+  
+  select(CNTYNAME, SCH_NAME, DISAGG_LABEL, NBR_GRADUATES_WITH_DIPLOMA, NBR_CCR_REGULAR) %>%
+  mutate(pct_ccr = NBR_CCR_REGULAR/NBR_GRADUATES_WITH_DIPLOMA)
+
+df_group <- df_clean %>% 
+  group_by(DISAGG_LABEL) %>%
+  summarise(ccr = sum(NBR_CCR_REGULAR, na.rm =TRUE),
+            tot = sum(NBR_GRADUATES_WITH_DIPLOMA, na.rm = TRUE),
+            pct = ccr/tot)
+```
+
+# Health Data from Health Inequality Project
+
+Reading in the data
+```{r}
+health_df <- read_csv("C:/Users/natek/studio_gdrive/GLP/CCU16/merged health stl.csv")
+```
+
+creating new columns
+
+```{r}
+health_df <- within(health_df,{
+  cur_smoke_q1 <- cur_smoke_q1*100
+  bmi_obese_q1 <- bmi_obese_q1*100
+  cur_smoke_q4 <- cur_smoke_q4*100
+  bmi_obese_q4 <- bmi_obese_q4*100
+  le_m_gap <- le_agg_q4_M - le_agg_q1_M
+  le_raceadj_m_gap <- le_raceadj_q4_M - le_raceadj_q1_M
+  le_f_gap <- le_agg_q4_F - le_agg_q1_F
+  le_raceadj_f_gap <- le_raceadj_q4_F - le_raceadj_q1_F
+  smoke_gap <- cur_smoke_q1 - cur_smoke_q4
+  bmi_gap <- bmi_obese_q1 - bmi_obese_q4
+})
+
+health_df$city <- health_df$cz_name.x
+
+```
+
+
+the graphing function
+```{r}
+rank_and_nb_group_h<-function(df, var, order="Descending", peers="Current",
+                            plot_title="", y_title = "Percent", caption_text = "",
+                            sigfig = 3, num_dec = 1, text = TRUE, h_line = FALSE,
+                            thousands_comma = T){
+  df$var <- df[[var]]
+  if(order=="Descending"){
+    d.order<-df[order(-df$var),]
+  }
+  if(order=="Ascending"){
+    d.order<-df[order(df$var),]
+  }
+  ranks<-1:length(df$var)
+  d.rank<-cbind(d.order,ranks)
+  names<-paste(d.rank$ranks,".",sep="")
+  names<-paste(names,d.rank$city)
+  d.graph<-cbind(d.rank,names)
+  
+  breaks <- classIntervals(d.graph$var,3,style="jenks")
+  d.graph$color <- NA
+  d.graph$color[d.graph$var<=breaks$brks[2]] <- "green"
+  d.graph$color[d.graph$var>breaks$brks[2] & d.graph$var<=breaks$brks[3]] <- "yellow"
+  d.graph$color[d.graph$var>breaks$brks[3]] <- "red"
+  d.graph$round <- format(round(signif(d.graph$var, digits = sigfig), digits = num_dec), big.mark = if_else(thousands_comma == TRUE, ",", ""))
+  d.graph$textfont <- "Museo Sans 300"
+  d.graph$textfont[d.graph$city == "Louisville"] <- "Museo Sans 300 Italic"
+  d.graph$linecolor <- "white"
+  d.graph$linecolor[d.graph$city == "Louisville"] <- "#00a9b7"
+  d.graph$textcolor <- "black"
+  d.graph$textcolor[d.graph$city == "Louisville"] <- "#00a9b7"
+  
+  
+  p <- ggplot(data=d.graph,aes(x=factor(names, levels=rev(unique(names))),
+                               y=var,fill=factor(color)))+guides(fill=FALSE)
+  p <- p+geom_bar(stat="identity",color=rev(d.graph$linecolor), size = 1)+coord_flip()+theme_tufte()
+  if(order=="Ascending"){
+    p <- p+scale_fill_manual(values=c("#96ca4f","#db2834","#ffd600"))
+  }
+  if(order=="Descending"){
+    p <- p+scale_fill_manual(values=c("#db2834","#96ca4f","#ffd600"))
+  }
+  p <- p + theme(text = element_text(family = "Museo Sans 300"),
+                 plot.title = element_text(size = 18, hjust = 0.5),
+                 axis.text.y=element_text(hjust=0, family = rev(d.graph$textfont),
+                                          size=12, color = rev(d.graph$textcolor)),
+                 axis.ticks=element_blank(),
+                 axis.text.x = element_blank(),
+                 plot.caption = element_text(),
+                 plot.subtitle = element_text(hjust = 0.5))
+  if (text == TRUE) {
+    p <-
+      p + geom_text(
+        aes(label = round),
+        hjust = 1.1,
+        size = 5,
+        family = "Museo Sans 300"
+      )
+  }
+  if (h_line == TRUE){
+    p <- p + geom_hline(yintercept = 0, linetype = "longdash", size = 1)
+  }
+  p <- p+labs(title = plot_title, y= y_title,
+              x = "", caption = caption_text)
+  p
+}
+```
+
+Adding proprietary fonts. 
+```{r}
+font.add("Museo Sans 300", "C:/Users/natek/studio_gdrive/GLP/fonts/MuseoSans_300.otf")
+font.add("Museo Sans 300 Italic", "C:/Users/natek/studio_gdrive/GLP/fonts/MuseoSans_300_Italic.otf")
+```
+
+writing images
+```{r}
+
+jpeg("images/le_m_gap.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "le_m_gap",
+  order = "Ascending",
+  plot_title = "Life Expectancy Gap Between Males \nin the Top and Bottom Income Quartiles",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/le_f_gap.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "le_f_gap",
+  order = "Ascending",
+  plot_title = "Life Expectancy Gap Between Females \nin the Top and Bottom Income Quartiles",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/le_raceadj_m_gap.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "le_raceadj_m_gap",
+  order = "Ascending",
+  plot_title = "Life Expectancy Gap Between Males \nin the Top and Bottom Income Quartiles (Race Adjusted)",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/le_raceadj_f_gap.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "le_raceadj_f_gap",
+  order = "Ascending",
+  plot_title = "Life Expectancy Gap Between Females \nin the Top and Bottom Income Quartiles (Race Adjusted)",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/le_agg_q1_M.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "le_agg_q1_M",
+  order = "Descending",
+  plot_title = "Life Expectancy of Males in the Bottom Income Quartiles",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/le_agg_q1_F.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "le_agg_q1_F",
+  order = "Descending",
+  plot_title = "Life Expectancy of Females in the Bottom Income Quartiles",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/smoking.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "smoke_gap",
+  order = "Ascending",
+  plot_title = "Gap in Smoking Rates between Top and Bottom Income Quintiles",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/bmi.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "bmi_gap",
+  order = "Ascending",
+  plot_title = "Gap in Obesity Rates between Top and Bottom Income Quintiles",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/smoking_q1.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "cur_smoke_q1",
+  order = "Ascending",
+  plot_title = "Smoking Rate in Bottom Income Quintiles",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+
+jpeg("images/bmi_q1.jpg", 900, 600, res = 100)
+showtext.begin()
+rank_and_nb_group_h(
+  health_df,
+  "bmi_obese_q1",
+  order = "Ascending",
+  plot_title = "Obesity Rate in Bottom Income Quintiles",
+  caption_text = "Source: Greater Louisville Project \nData from the Health Inequality Project"
+)
+showtext.end()
+dev.off()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
