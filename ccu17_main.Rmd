@@ -21,29 +21,48 @@ Pull Peers Function
 pull_peers_MSA<-function(data){
   all.peers <- filter(data, data$MSA %in% c("24340", "41180", "36420", "46140", "24860", "28940", "13820", "26900", "31140", "28140", "36540", "24660", "16740", "18140", "17140", "34980", "32820", "27260", "39580", "19380", "40060"))
   
-  # all.peers <- filter(data, data$MSA == 24340 | data$MSA == 41180
-  #                   |data$MSA == 36420 | data$MSA == 46140
-  #                   |data$MSA == 24860 |data$MSA == 28940
-  #                   |data$MSA == 13820 |data$MSA == 26900
-  #                   |data$MSA == 31140 |data$MSA == 28140
-  #                   |data$MSA == 36540 |data$MSA == 24660
-  #                   |data$MSA == 16740 |data$MSA == 18140
-  #                   |data$MSA == 17140 |data$MSA == 34980
-  #                   |data$MSA == 32820 |data$MSA == 27260
-  #                   |data$MSA == 39580 |data$MSA == 19380
-  #                   |data$MSA == 40060)
+  all.peers$baseline <- 1
+  all.peers$current  <- 1
   
-  
-  all.peers$baseline<-1
-  all.peers$current<-1
   all.peers$baseline[all.peers$MSA == 24340 | all.peers$MSA == 41180
                      |all.peers$MSA == 36420 | all.peers$MSA == 46140
-                     |all.peers$MSA == 24860 | all.peers$MSA == 28940]<-0
+                     |all.peers$MSA == 24860 | all.peers$MSA == 28940] <-0
+  
   all.peers$current[all.peers$MSA == 27260 | all.peers$MSA == 39580
-                    |all.peers$MSA == 19380 | all.peers$MSA == 40060]<-0
+                    |all.peers$MSA == 19380 | all.peers$MSA == 40060] <-0
+  all.peers
+}
+
+pull_peers_FIPS <- function(dat){
+  all.peers <- subset(dat, dat$FIPS == 1073 | dat$FIPS == 37119
+                      |dat$FIPS == 39061 |dat$FIPS == 39049
+                      |dat$FIPS == 26081 |dat$FIPS == 37081
+                      |dat$FIPS == 45045 |dat$FIPS == 18097
+                      |dat$FIPS == 29095 |dat$FIPS == 47093
+                      |dat$FIPS == 21111 |dat$FIPS == 47157
+                      |dat$FIPS == 47037 |dat$FIPS == 40109
+                      |dat$FIPS == 31055 |dat$FIPS == 29189
+                      |dat$FIPS == 29510 |dat$FIPS == 40143
+                      |dat$FIPS == 12031 |dat$FIPS == 37183
+                      |dat$FIPS == 39113 |dat$FIPS == 51760
+                      |dat$FIPS == "01073")
+  all.peers$baseline <- 1
+  all.peers$current <- 1
+  all.peers$baseline[all.peers$FIPS==26081|all.peers$FIPS==29189
+                     |all.peers$FIPS==29510|all.peers$FIPS==40109
+                     |all.peers$FIPS==40143|all.peers$FIPS==45045
+                     |all.peers$FIPS==47093]<-0
+  all.peers$current[all.peers$FIPS== 12031|all.peers$FIPS==37183|
+                      all.peers$FIPS==39113|all.peers$FIPS==51760]<-0
   all.peers
 }
 ```
+
+Reading in data
+```{r}
+mpi_msa <- read_feather("data/peer_acs_micro.feather")
+```
+
 
 ## Code used to cut down dataset
 
@@ -70,11 +89,6 @@ mpi_msa <- mpi_msa %>% filter((GQ == 1 | GQ == 2) & YEAR == 2015)
 ```
 
 ## Microdata analysis
-
-Reading in data
-```{r}
-mpi_msa <- read_feather("peer_acs_micro.feather")
-```
 
 Matching FIPS numbers to recognizable names. 
 ```{r}
@@ -125,7 +139,7 @@ Family employment is also assigned at the household level. If no one in the fami
 mpi_msa$INCINVST[mpi_msa$INCINVST == 999999] <- 0
 mpi_msa$INCRETIR[mpi_msa$INCRETIR == 999999] <- 0
 
-mpi_msa = mpi_msa %>%
+mpi_msa <- mpi_msa %>%
   mutate(emp_num = if_else(EMPSTAT == 1, 1, 0)) %>%
   group_by(SERIAL, YEAR) %>%
    mutate(retired = if_else(any(INCRETIR > 20900), 1, 0),
