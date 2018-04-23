@@ -436,26 +436,27 @@ rank_and_nb_group<-function(df, var, order="Descending",
     p <- p+scale_fill_manual(values=c("#db2834","#96ca4f","#ffd600"))
   }
   p <- p + theme(text = element_text(family = "Museo Sans 300"),
-                 plot.title = element_text(size = 18, hjust = 0.5),
+                 plot.title = element_text(size = 36, hjust = 0.5),
                  axis.text.y=element_text(hjust=0, family = rev(d.graph$textfont),
-                                          size=12, color = rev(d.graph$textcolor)),
+                                          size=24, color = rev(d.graph$textcolor)),
                  axis.ticks=element_blank(),
                  axis.text.x = element_blank(),
-                 plot.caption = element_text(),
-                 plot.subtitle = element_text(hjust = 0.5))
+                 axis.title.x = element_text(size = 24),
+                 plot.caption = element_text(size = 18),
+                 plot.subtitle = element_text(size = 24, hjust = 0.5))
   if (text == TRUE) {
     p <-
       p + geom_text(
         aes(label = round),
         hjust = 1.1,
-        size = 5,
+        size = 10,
         family = "Museo Sans 300"
       )
   }
   if (h_line == TRUE){
     p <- p + geom_hline(yintercept = 0, linetype = "longdash", size = 1)
   }
-  p <- p+labs(title = plot_title, y= y_title,
+  p <- p+labs(title = plot_title, y= y_title, subtitle = subtitle,
               x = "", caption = caption_text)
   p
 }
@@ -464,94 +465,118 @@ rank_and_nb_group<-function(df, var, order="Descending",
 
 Adding fonts
 ```{r font add}
-font.add("Museo Sans 300", "C:/Users/natek/studio_gdrive/GLP/fonts/MuseoSans_300.otf")
-font.add("Museo Sans Italic", "C:/Users/natek/studio_gdrive/GLP/fonts/MuseoSans_300_Italic.otf")
-
+font.add("Museo Sans 300", "MuseoSans_300.otf")
+font.add("Museo Sans 300 Italic", "MuseoSans_300_Italic.otf")
 ```
 
 Writing images
 ```{r images}
 
-jpeg("images/ccu17_median_hhold_income_poor_ch.jpg", 900, 600, res = 100)
-showtext.begin()
+showtext.auto()
+
+jpeg("images/ccu17_median_hhold_income_poor_ch.jpg", 1800, 1200, res = 100)
 rank_and_nb_group(graph_df, "median_hhold_income_child", order = "Descending",
-                  plot_title = "Median income of households with children in poverty, 2015",
+                  plot_title = "Median income of households in poverty with children, 2015",
                   caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
-showtext.end()
 dev.off()
 
-jpeg("images/ccu17_poor_no_assoc.jpg", 900, 600, res = 100)
-showtext.begin()
+#jpeg("images/ccu17_hh_pov_unemployment.jpg", 1800, 1200, res = 100)
+#rank_and_nb_group(graph_df, "hh_unemployment", order = "Ascending",
+#                  plot_title = "Households in poverty with children where\nsomeone is unemployed, 2015",
+#                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
+#dev.off()
+
+
+jpeg("images/ccu17_poor_no_assoc.jpg", 1800, 1200, res = 100)
 rank_and_nb_group(graph_df, "poor_no_assoc", order = "Ascending",
-                  plot_title = "Children in poverty in households where no one has \nan associate's degree or higher, 2015",
+                  plot_title = "Children in poverty in households where no one has \nan associate degree or higher, 2015",
                   caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
-showtext.end()
 dev.off()
 
-jpeg("images/ccu17_poor_no_hs.jpg", 900, 600, res = 100)
-showtext.begin()
+jpeg("images/ccu17_poor_no_hs.jpg", 1800, 1200, res = 100)
 rank_and_nb_group(graph_df, "poor_no_hs", order = "Descending",
                   plot_title = "Children in poverty in households where no one has \na high school degree or equivalent, 2015",
                   caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
-showtext.end()
 dev.off()
 
-jpeg("images/ccu17_median_poor_hhold_all.jpg", 900, 600, res = 100)
-showtext.begin()
+jpeg("images/ccu17_median_poor_hhold_all.jpg", 1800, 1200, res = 100)
 rank_and_nb_group(graph_df, "median_hhold_income_all", order = "Descending",
                   plot_title = "Median Income of Households in Poverty, 2015",
                   caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
-showtext.end()
 dev.off()
 
-jpeg("images/ccu17_housing_burden_poor_ch.jpg", 900, 600, res = 100)
-showtext.begin()
-rank_and_nb_group(graph_df, "hcost_dep", order = "Ascending",
+jpeg("images/ccu17_housing_burden_poor_ch.jpg", 1800, 1200, res = 100)
+rank_and_nb_group(graph_df, "hcost_burdened", order = "Ascending",
                   plot_title = "Poor children in families paying over half their income \nin housing costs, 2015",
                   caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
-showtext.end()
 dev.off()
 
-jpeg("images/ccu17_percent_on_housing.jpg", 900, 600, res = 100)
-showtext.begin()
+jpeg("images/ccu17_percent_on_housing.jpg", 1800, 1200, res = 100)
 rank_and_nb_group(graph_df, "ratio_housing_gap", order = "Ascending",
-                  plot_title = "Ratio of median percent of income spent on housing \nby households in poverty with children\n and households not in poverty, 2015",
+                  plot_title = "Ratio of median percent of income spent on housing by households in poverty with children\n and households not in poverty with children, 2015",
                   caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
-showtext.end()
+dev.off()
+
+jpeg("images/ccu17_pct_poor_children_moved.jpg", 1800, 1200, res = 100)
+rank_and_nb_group(graph_df, "poor_moved", order = "Ascending",
+                  plot_title = "Poor children who moved homes in the last twelve months, 2015",
+                  subtitle = "Three-year average",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
+dev.off()
+
+jpeg("images/ccu17_pct_poor_hh_employed.jpg", 1800, 1200, res = 100)
+rank_and_nb_group(graph_df, "pct_emp", order = "Ascending",
+                  plot_title = "Households in poverty with children\nwhere someone is employed, 2015",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nAmerican Community Survey Microdata Data via IPUMS")
 dev.off()
 ```
 
 # College and Career Ready
 
 ```{r}
-df_kde <- read_csv("kde1516.csv",
-               col_types = cols(
-                 NBR_GRADUATES_WITH_DIPLOMA = col_integer()
-               )) #kde1516 was previously pulled by hand/excel
+df_ccr    <- read_csv("data/jeffcograds.csv", col_types = cols(NBR_CCR_REGULAR = col_character()))
+df_kready <- read_csv("data/jeffcokready1617.csv", skip = 1)
 
-df_jeff <- read_csv("jeffcograds.csv")
+df_ccr <- df_ccr %>%
+  filter(SCH_NAME == "---District Total---") %>%
+  filter(CNTYNAME == "JEFFERSON") %>%
+  filter(DISAGG_LABEL == "All Students" | DISAGG_LABEL == "Free/Reduced-Price Meals") %>%
+  select(DISAGG_LABEL, NBR_GRADUATES_WITH_DIPLOMA, NBR_CCR_REGULAR) %>%
+  transmute(Demographic = DISAGG_LABEL,
+            total_grads = as.numeric(gsub(",|\\*", "", NBR_GRADUATES_WITH_DIPLOMA)),
+            ccr_grads = as.numeric(gsub(",", "", NBR_CCR_REGULAR)),
+            not_ccr_grads = total_grads - ccr_grads)
+
+df_kready <- df_kready %>% 
+  filter(`Prior Setting` == "All Students" ) %>%
+  filter(`School Name` == "-- District Total --") %>%
+  filter(`District Name` == "Jefferson County") %>%
+  filter(Demographic == "All Students" | Demographic == "Free Reduced Price Meals") %>%
+  select(Demographic, `Number Tested`, `Not Ready`, `Kindergarten Ready`) %>%
+  transmute(Demographic = Demographic,
+            total_kind = as.numeric(gsub(",", "", `Number Tested`)),
+            not_kready = total_kind * `Not Ready` / 100,
+            kready = total_kind * `Kindergarten Ready` / 100)
+  
+
+df_ccr$Demographic[df_ccr$Demographic == "Free/Reduced-Price Meals"] <- "Free Reduced Price Meals"
+
+df_jeff <- left_join(df_ccr, df_kready, by = "Demographic")
 ```
 
-```{r}
-df__jeff_clean <- df_jeff %>%
-  filter(DISAGG_LABEL == "All Students" | DISAGG_LABEL == "Free/Reduced-Price Meals") %>%
-  
-  
-  select(CNTYNAME, SCH_NAME, DISAGG_LABEL, NBR_GRADUATES_WITH_DIPLOMA, NBR_CCR_REGULAR) %>%
-  mutate(pct_ccr = NBR_CCR_REGULAR/NBR_GRADUATES_WITH_DIPLOMA)
+```{r, eval = SKIP}
+df_jeff[3,] <- c("Non Free Reduced Price Meals", df_jeff[1, 2:7] - df_jeff[2, 2:7])
 
-df_group <- df_clean %>% 
-  group_by(DISAGG_LABEL) %>%
-  summarise(ccr = sum(NBR_CCR_REGULAR, na.rm =TRUE),
-            tot = sum(NBR_GRADUATES_WITH_DIPLOMA, na.rm = TRUE),
-            pct = ccr/tot)
+df_jeff <- df_jeff %>% 
+  mutate(pct_ccr = ccr_grads/total_grads * 100,
+         pct_kready = kready / total_kind * 100)
 ```
 
 # Health Data from Health Inequality Project
 
 Reading in the data
 ```{r}
-health_df <- read_csv("C:/Users/natek/studio_gdrive/GLP/CCU16/merged health stl.csv")
+health_df <- read_csv("data/merged health stl.csv")
 ```
 
 creating new columns
@@ -618,14 +643,16 @@ rank_and_nb_group_h<-function(df, var, order="Descending", peers="Current",
     p <- p+scale_fill_manual(values=c("#db2834","#96ca4f","#ffd600"))
   }
   p <- p + theme(text = element_text(family = "Museo Sans 300"),
-                 plot.title = element_text(size = 18, hjust = 0.5),
+                 plot.title = element_text(size = 36, hjust = 0.5),
                  axis.text.y=element_text(hjust=0, family = rev(d.graph$textfont),
-                                          size=12, color = rev(d.graph$textcolor)),
+                                          size=24, color = rev(d.graph$textcolor)),
                  axis.ticks=element_blank(),
                  axis.text.x = element_blank(),
-                 plot.caption = element_text(),
-                 plot.subtitle = element_text(hjust = 0.5))
-  if (text == TRUE) {
+                 axis.title.x = element_text(size = 24),
+                 plot.caption = element_text(size = 18),
+                 plot.subtitle = element_text(size = 24, hjust = 0.5))
+  
+    if (text == TRUE) {
     p <-
       p + geom_text(
         aes(label = round),
@@ -643,16 +670,10 @@ rank_and_nb_group_h<-function(df, var, order="Descending", peers="Current",
 }
 ```
 
-Adding proprietary fonts. 
-```{r}
-font.add("Museo Sans 300", "C:/Users/natek/studio_gdrive/GLP/fonts/MuseoSans_300.otf")
-font.add("Museo Sans 300 Italic", "C:/Users/natek/studio_gdrive/GLP/fonts/MuseoSans_300_Italic.otf")
-```
-
 writing images
 ```{r}
 
-jpeg("images/le_m_gap.jpg", 900, 600, res = 100)
+jpeg("images/le_m_gap.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -664,7 +685,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/le_f_gap.jpg", 900, 600, res = 100)
+jpeg("images/le_f_gap.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -676,7 +697,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/le_raceadj_m_gap.jpg", 900, 600, res = 100)
+jpeg("images/le_raceadj_m_gap.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -688,7 +709,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/le_raceadj_f_gap.jpg", 900, 600, res = 100)
+jpeg("images/le_raceadj_f_gap.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -700,7 +721,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/le_agg_q1_M.jpg", 900, 600, res = 100)
+jpeg("images/le_agg_q1_M.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -712,7 +733,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/le_agg_q1_F.jpg", 900, 600, res = 100)
+jpeg("images/le_agg_q1_F.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -724,7 +745,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/smoking.jpg", 900, 600, res = 100)
+jpeg("images/smoking.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -736,7 +757,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/bmi.jpg", 900, 600, res = 100)
+jpeg("images/bmi.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -748,7 +769,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/smoking_q1.jpg", 900, 600, res = 100)
+jpeg("images/smoking_q1.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
@@ -760,7 +781,7 @@ rank_and_nb_group_h(
 showtext.end()
 dev.off()
 
-jpeg("images/bmi_q1.jpg", 900, 600, res = 100)
+jpeg("images/bmi_q1.jpg", 1800, 1200, res = 100)
 showtext.begin()
 rank_and_nb_group_h(
   health_df,
