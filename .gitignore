@@ -1,2 +1,15 @@
 images/
 .Rproj.user
+
+<<<<<<< Updated upstream
+Original Data/
+
+*.otf
+
+=======
+*.otf
+
+Original Data/
+
+>>>>>>> Stashed changes
+output\.csv
