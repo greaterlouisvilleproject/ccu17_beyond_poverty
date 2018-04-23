@@ -794,92 +794,52 @@ showtext.end()
 dev.off()
 ```
 
-Housing
-Read in data
-```{r}
-data <- read_feather("housing.feather")
-```
-
-Subset to peers, apply city names, and remove residents of group quarters
-```{r}
-data$MET2013[data$PUMA == 100]  <- 46140
-data$MET2013[data$PUMA == 1201] <- 46140
-data$MET2013[data$PUMA == 1202] <- 46140
-data$MET2013[data$PUMA == 1203] <- 46140
-data$MET2013[data$PUMA == 1204] <- 46140
-data$MET2013[data$PUMA == 1301] <- 46140
-data$MET2013[data$PUMA == 1302] <- 46140
-data$MET2013[data$PUMA == 1501] <- 46140
-data$MET2013[data$PUMA == 1601] <- 46140
-
-data <- data %>% rename(MSA = MET2013)
-
-data <- pull_peers_MSA(data)
-
-data$city<-NA
-data$city[data$MSA == 24340] = "Grand Rapids"
-data$city[data$MSA == 41180] = "St. Louis"
-data$city[data$MSA == 36420] = "Oklahoma City"
-data$city[data$MSA == 46140] = "Tulsa"
-data$city[data$MSA == 24860] = "Greenville"
-data$city[data$MSA == 28940] = "Knoxville"
-data$city[data$MSA == 13820] = "Birmingham"
-data$city[data$MSA == 31140] = "Louisville"
-data$city[data$MSA == 26900] = "Indianapolis"
-data$city[data$MSA == 28140] = "Kansas City"
-data$city[data$MSA == 36540] = "Omaha"
-data$city[data$MSA == 24660] = "Greensboro"
-data$city[data$MSA == 16740] = "Charlotte"
-data$city[data$MSA == 18140] = "Columbus"
-data$city[data$MSA == 17140] = "Cincinnati"
-data$city[data$MSA == 34980] = "Nashville"
-data$city[data$MSA == 32820] = "Memphis"
-data$city[data$MSA == 27260] = "Jacksonville"
-data$city[data$MSA == 39580] = "Raleigh"
-data$city[data$MSA == 19380] = "Dayton"
-data$city[data$MSA == 40060] = "Richmond"
-
-data <- data %>% filter(GQ == 1 | GQ == 2 | GQ == 5)
-```
-
-MOVEDIN is the number of years since the occupant moved into the residence. It is 0 for members of the family that are not the head of the household, so the value for the head of household is applied to other family members. 
-A value of 1 is assigned if the child's family has moved in the last year, otherwise it is 0.
-
-```{r}
-data <- data %>% 
-  group_by(YEAR, SERIAL, DATANUM) %>%
-  mutate(max = max(MOVEDIN)) %>%
-  filter(AGE < 18) %>%
-  filter(YEAR > 2011)
-
-data$moved <- if_else(data$max == 1, 1, 0)
-data$moved[data$max == 0] <- NA
-
-```
-
-Assigns a value of 1 to the variable POV if the family is below the poverty line, otherwise 0. Values of 0 in the IPUMS POVERTY variable 
-[signify NA.
-```{r}
-data$POV <- if_else(data$POVERTY <= 100, 1, 0)
-data$POV[data$POVERTY == 0] <- NA
-```
-
-Creating a survey object from the housing data and a 
-```{r}
-housing_svy <- svydesign(ids = ~1, weights = ~PERWT, data = data)
-
-housing_svy_df <- svyby(~moved, ~city+POV, design = housing_svy, svymean, na.rm = TRUE)
-```
-
 
 Food security
 
 Read in data
 ```{r}
-insecurity = read_feather('insecurity.feather')
+insecurity <- read_feather("data/peer_food_insecurity_micro.feather")
 ```
 
-The FAMINC variable is coded into categories that occur in intervals of 2500, 5000, and 10000. Here income is recoded to the lower value of the faminc variable.
+The original data set contained observations for all of the United States. The data sec was trimmed to only peer cities using the following code.
+```{r, eval = FALSE}
+insecurity$city <- NA
+insecurity$city[insecurity$METAREA == 3001] = "Grand Rapids"
+insecurity$city[insecurity$METAREA == 7040] = "St. Louis"
+insecurity$city[insecurity$METAREA == 5880] = "Oklahoma City"
+insecurity$city[insecurity$METAREA == 8560] = "Tulsa"
+insecurity$city[insecurity$METAREA == 3162] = "Greenville"
+insecurity$city[insecurity$METAREA == 3840] = "Knoxville"
+insecurity$city[insecurity$METAREA == 1001] = "Birmingham"
+insecurity$city[insecurity$METAREA == 4520] = "Louisville"
+insecurity$city[insecurity$METAREA == 3480] = "Indianapolis"
+insecurity$city[insecurity$METAREA == 3760] = "Kansas City"
+insecurity$city[insecurity$METAREA == 5921] = "Omaha"
+insecurity$city[insecurity$METAREA == 3122] = "Greensboro"
+insecurity$city[insecurity$METAREA == 1521] = "Charlotte"
+insecurity$city[insecurity$METAREA == 1840] = "Columbus"
+insecurity$city[insecurity$METAREA == 1641] = "Cincinnati"
+insecurity$city[insecurity$METAREA == 5361] = "Nashville"
+insecurity$city[insecurity$METAREA == 4920] = "Memphis"
+insecurity$city[insecurity$METAREA == 3590] = "Jacksonville"
+insecurity$city[insecurity$METAREA == 6642] = "Raleigh"
+insecurity$city[insecurity$METAREA == 2002] = "Dayton"
+insecurity$city[insecurity$METAREA == 6761] = "Richmond"
+
+insecurity <- insecurity %>% filter(!is.na(city))
+
+insecurity$baseline <- 1
+insecurity$current <- 1
+
+insecurity$baseline[insecurity$city %in% c("Grand Rapids", "St. Louis", "Oklahoma City", 
+                                     "Tulsa", "Greenville", "Knoxville")] <- 0
+insecurity$current[insecurity$city %in% c("Jacksonville", "Raleigh", "Dayton", "Richmond")] <-0
+
+insecurity <- insecurity %>% filter(current == 1)
+```
+
+The FAMINC variable is coded into categories that occur in intervals of 2500, 5000, and 10000. Income is recoded to the lower value of the faminc variable.
 ```{r}
 
 income <- data.frame(FAMINC = c(100, 210,  300,  430,   470,   500,   600,   710,   720,   730,   740,   820,   830,   841,    842,    843,    996, 997, 999),
@@ -888,163 +848,135 @@ income <- data.frame(FAMINC = c(100, 210,  300,  430,   470,   500,   600,   710
 insecurity <- left_join(insecurity, income)
 ```
 
-The same household is included in the CPS multiple times, so multiple observations of the same household are removed.
+The same household is included in the CPS multiple times, so multiple observations of the same individual are removed.
 ```{r}
 insecurity <- insecurity[!duplicated(insecurity$CPSIDP),]
 ```
 
 Calculate the number of children in each household is calculated and filter 
 ```{r}
-insecurity %<>% add_count(CPSID) %>% filter(YEAR>2011)
+insecurity %<>% add_count(CPSID)
 ```
 
 The family's poverty status is based off of the lowest level of income in their income bracket. For example, the poverty threshold for a family of 4 in 2016 was 24,563. Families with incomes up to 25,000 are classified as in poverty. This biases the estimate of food security among those in poverty downward and the estimate for those not in poverty upward.
 ```{r}
 insecurity$poverty <- 0
 insecurity$poverty[insecurity$inc < 20000] <- 1
-insecurity$poverty[insecurity$n >= 4][insecurity$inc == 20000] <- 1
-insecurity$poverty[insecurity$n >= 5][insecurity$inc == 25000] <- 1
-insecurity$poverty[insecurity$n >= 6][insecurity$inc == 30000] <- 1
-insecurity$poverty[insecurity$n >= 7][insecurity$inc == 35000] <- 1
-insecurity$poverty[insecurity$n >= 8][insecurity$inc == 40000] <- 1
+insecurity$poverty[insecurity$n >= 4 && insecurity$inc == 20000] <- 1
+insecurity$poverty[insecurity$n >= 5 && insecurity$inc == 25000] <- 1
+insecurity$poverty[insecurity$n >= 6 && insecurity$inc == 30000] <- 1
+insecurity$poverty[insecurity$n >= 7 && insecurity$inc == 35000] <- 1
+insecurity$poverty[insecurity$n >= 8 && insecurity$inc == 40000] <- 1
 ```
 
 A dummy variable food_insecure is equal to 1 if the family is food insecure and 0 if not. Separate dummy variables are created for household food security and child food security.
 ```{r}
 insecurity$food_insecure <- if_else(insecurity$FSSTATUS == 2 | insecurity$FSSTATUS == 3, 1, 0)
 insecurity$food_insecure[insecurity$FSSTATUS == 98 | insecurity$FSSTATUS == 99] <- NA
+
+insecurity$food_insecure_ch <- if_else(insecurity$FSSTATUSC == 2 | insecurity$FSSTATUSC == 3, 1, 0)
+insecurity$food_insecure_ch[insecurity$FSSTATUSC == 98 | insecurity$FSSTATUSC == 99] <- NA
+
+insecurity <- insecurity %>% filter(AGE<18)
+
 ```
 
-Add city data
-```{r}
-insecurity$city <- NA
-insecurity$city[insecurity$METAREA == 3001] = "Grand Rapids"
-insecurity$city[insecurity$METAREA == 7040] = "St. Louis"
-insecurity$city[insecurity$METAREA == 5880] = "Oklahoma City"
-insecurity$city[insecurity$METAREA == 8560] = "Tulsa"
-insecurity$city[insecurity$METAREA == 3162] = "Greenville"
-insecurity$city[insecurity$METAREA == 3840] = "Knoxville"
-insecurity$city[insecurity$METAREA == 1001] = "Birmingham"
-insecurity$city[insecurity$METAREA == 4520] = "Louisville"
-insecurity$city[insecurity$METAREA == 3480] = "Indianapolis"
-insecurity$city[insecurity$METAREA == 3760] = "Kansas City"
-insecurity$city[insecurity$METAREA == 5921] = "Omaha"
-insecurity$city[insecurity$METAREA == 3122] = "Greensboro"
-insecurity$city[insecurity$METAREA == 1521] = "Charlotte"
-insecurity$city[insecurity$METAREA == 1840] = "Columbus"
-insecurity$city[insecurity$METAREA == 1641] = "Cincinnati"
-insecurity$city[insecurity$METAREA == 5361] = "Nashville"
-insecurity$city[insecurity$METAREA == 4920] = "Memphis"
-insecurity$city[insecurity$METAREA == 3590] = "Jacksonville"
-insecurity$city[insecurity$METAREA == 6642] = "Raleigh"
-insecurity$city[insecurity$METAREA == 2002] = "Dayton"
-insecurity$city[insecurity$METAREA == 6761] = "Richmond"
-
-insecurity <- insecurity %>% filter(!is.na(city))
-  insecurity$baseline <- 1
-  insecurity$current <- 1
-  insecurity$baseline[insecurity$city %in% c("Grand Rapids", "St. Louis", "Oklahoma City", 
-                                       "Tulsa", "Greenville", "Knoxville")] <- 0
-  insecurity$current[insecurity$city %in% c("Jacksonville", "Raleigh", "Dayton", "Richmond")] <-0
-  
-```
-
-Create survey data frames. Use WTSUPP to weight the mean because the statistics produced are for the percentage of children who live in households that are food insecure and the percentage of children who are food insecure. 
+Individual weight analysis
 ```{r}
 fs_svy <- svydesign(ids = ~1, weights = ~WTSUPP, data = insecurity)
 
-fs_svy_df <- svyby(~food_insecure, ~city+poverty, design = fs_svy, svymean, na.rm = TRUE)
+fs_svy_df <- svyby(~food_insecure, ~city+poverty, design = fs_svy, svymean, na.rm = TRUE) %>%
+  select(city, poverty, food_insecure) %>%
+  spread(key = poverty, value = food_insecure) %>%
+  rename(poor_food_insecure = `1`, not_poor_food_insecure = `0`)
+
+fs_svy_df$poor_food_insecure <- rescale(fs_svy_df$poor_food_insecure)
+fs_svy_df$not_poor_food_insecure <- rescale(fs_svy_df$not_poor_food_insecure)
 ```
 
-Sample size:
 ```{r}
-table(insecurity$YEAR[insecurity$city == "Louisville"])
+jpeg("images/ccu17_food_security.jpg", 1800, 1200, res = 100)
+rank_and_nb_group(fs_svy_df, "poor_food_insecure", order = "Ascending",
+                  plot_title = "Poor children living in housheolds that are food insecure",
+                  caption_text = "Source: Greater Louisville Project Analysis of\nCurrent Population Survey Microdata Data via IPUMS")
+dev.off()
 ```
 
-ASEC method - very small sample size but more precise poverty estimates
 
-Read in the ASEC poverty supplement to the CPS
-```{r}
-poverty = read_feather('poverty.feather')
-insecurity = read_feather('insecurity.feather')
-```
+```{r, message = FALSE}
+transit_data <- read_csv("data/ACS_15_1YR_S0802_with_ann.csv", skip=1, col_types = cols("Id2" = col_double()))
 
-Add city data
-```{r}
-insecurity$city <- NA
-insecurity$city[insecurity$METAREA == 3001] = "Grand Rapids"
-insecurity$city[insecurity$METAREA == 7040] = "St. Louis"
-insecurity$city[insecurity$METAREA == 5880] = "Oklahoma City"
-insecurity$city[insecurity$METAREA == 8560] = "Tulsa"
-insecurity$city[insecurity$METAREA == 3162] = "Greenville"
-insecurity$city[insecurity$METAREA == 3840] = "Knoxville"
-insecurity$city[insecurity$METAREA == 1001] = "Birmingham"
-insecurity$city[insecurity$METAREA == 4520] = "Louisville"
-insecurity$city[insecurity$METAREA == 3480] = "Indianapolis"
-insecurity$city[insecurity$METAREA == 3760] = "Kansas City"
-insecurity$city[insecurity$METAREA == 5921] = "Omaha"
-insecurity$city[insecurity$METAREA == 3122] = "Greensboro"
-insecurity$city[insecurity$METAREA == 1521] = "Charlotte"
-insecurity$city[insecurity$METAREA == 1840] = "Columbus"
-insecurity$city[insecurity$METAREA == 1641] = "Cincinnati"
-insecurity$city[insecurity$METAREA == 5361] = "Nashville"
-insecurity$city[insecurity$METAREA == 4920] = "Memphis"
-insecurity$city[insecurity$METAREA == 3590] = "Jacksonville"
-insecurity$city[insecurity$METAREA == 6642] = "Raleigh"
-insecurity$city[insecurity$METAREA == 2002] = "Dayton"
-insecurity$city[insecurity$METAREA == 6761] = "Richmond"
+transit_data <- transit_data %>% rename(FIPS = Id2) %>% mutate(year = 2015)
 
-insecurity <- insecurity %>% filter(!is.na(city))
-  insecurity$baseline <- 1
-  insecurity$current <- 1
-  insecurity$baseline[insecurity$city %in% c("Grand Rapids", "St. Louis", "Oklahoma City", 
-                                       "Tulsa", "Greenville", "Knoxville")] <- 0
-  insecurity$current[insecurity$city %in% c("Jacksonville", "Raleigh", "Dayton", "Richmond")] <-0
+transit_data <- pull_peers_FIPS(transit_data)
+
+transit_data <- transit_data %>%
+  transmute(
+    FIPS = FIPS,
+    year = year,
+    
+    #total numbers
+    total = `Total; Estimate; POVERTY STATUS IN THE PAST 12 MONTHS - Workers 16 years and over for whom poverty status is determined`,
+    total_public = `Public transportation (excluding taxicab); Estimate; POVERTY STATUS IN THE PAST 12 MONTHS - Workers 16 years and over for whom poverty status is determined`,
+    
+    #poor percents
+    pct_pov = `Total; Estimate; POVERTY STATUS IN THE PAST 12 MONTHS - Workers 16 years and over for whom poverty status is determined - Below 100 percent of the poverty level`,
+    public_pct_pov = `Public transportation (excluding taxicab); Estimate; POVERTY STATUS IN THE PAST 12 MONTHS - Workers 16 years and over for whom poverty status is determined - Below 100 percent of the poverty level`,
+    
+    #slightly above poverty public transit percent
+    pct_pov150 = `Total; Estimate; POVERTY STATUS IN THE PAST 12 MONTHS - Workers 16 years and over for whom poverty status is determined - 100 to 149 percent of the poverty level`,
+    public_pct_pov150 = `Public transportation (excluding taxicab); Estimate; POVERTY STATUS IN THE PAST 12 MONTHS - Workers 16 years and over for whom poverty status is determined - 100 to 149 percent of the poverty level`,
+    
+    #above poverty public transit percent
+    pct_nonpov = `Total; Estimate; POVERTY STATUS IN THE PAST 12 MONTHS - Workers 16 years and over for whom poverty status is determined - At or above 150 percent of the poverty level`,
+    public_pct_nonpov = `Public transportation (excluding taxicab); Estimate; POVERTY STATUS IN THE PAST 12 MONTHS - Workers 16 years and over for whom poverty status is determined - At or above 150 percent of the poverty level`
+    ) %>%
+  mutate_all(as.numeric) %>%
+  transmute(
+    FIPS = as.character(FIPS),
+    year = as.character(year),
   
+  pct_public = 
+    (total / total_public) * 100,
+    
+  pov_pct_public = 
+    ((public_pct_pov * total_public) * 100/ 
+    (pct_pov * total)),
+    
+  nonpov_pct_public = 
+    ((public_pct_pov150 * total_public + public_pct_nonpov * total_public) * 100/ 
+    (pct_pov150 * total + pct_nonpov * total))
+  )
+
+#Apply FIPS codes names
+names <- read_csv("data/FIPS two stl.csv")
+names$FIPS <- as.character(names$FIPS)
+transit_data <- left_join(transit_data, names, by = "FIPS")
+
+##Add population data
+population_data <- read_csv("data/population_data.csv")
+population_data$FIPS <- as.character(population_data$FIPS)
+transit_data$year <- as.integer(transit_data$year)
+transit_data <- left_join(transit_data, population_data, by = c("FIPS", "year"))
+
+##Merge St. Louis city and St. Louis county
+transit_data <- transit_data %>%
+  select(-county, -state, -weights, -FIPS, -year) %>%
+  group_by(city) %>%
+  summarise_each(funs(weighted.mean(.,population)), -population) %>%
+  ungroup()
 ```
 
-Join the ASEC and the food insecurity supplement
 ```{r}
-data = left_join(insecurity, poverty, by = c("CPSID", "CPSIDP")) %>%
-  select(city, CPSID, CPSIDP, FSPOOR, YEAR = YEAR.x, AGE = AGE.x, HWTSUPP = HWTSUPP.x, WTSUPP = WTSUPP.x,
-         OFFPOV, FSSTATUS, FSSTATUSC)
-```
+output_df <- left_join(graph_df, ch_pov_df, by = "city")
 
-Generate dummy variables to describe whether the family is in poverty and is food secure
-```{r}
-data$poverty <- if_else(data$OFFPOV == 1, 1, 0)
-data$poverty[data$OFFPOV == 99] <- NA
+output_df <- output_df %>% rename(per_child_pov = income_poverty)
 
-data$food_insecure <- if_else(data$FSSTATUS == 2 | data$FSSTATUS == 3, 1, 0)
-data$food_insecure[data$FSSTATUS == 98 | data$FSSTATUS == 99] <- NA
-```
+output_df$per_child_pov <- rescale(output_df$per_child_pov)
 
-Remove multiple observations of the same individuals from the data and subset to children
-```{r}
-data <- data[!duplicated(data$CPSIDP),]
-
-data <- data[complete.cases(data),] 
-
-data <- data %>% filter(AGE < 18)
+write_csv(output_df, "output.csv")
 
 ```
-
-Create survey data frames. Use WTSUPP to weight the mean because the statistics produced are for the percentage of children who live in households that are food insecure and the percentage of children who are food insecure. 
-```{r}
-fs_svy2 <- svydesign(ids = ~1, weights = ~WTSUPP, data = data)
-
-fs_svy_df2 <- svyby(~food_insecure, ~city+poverty, design = fs_svy2, svymean, na.rm = TRUE)
-```
-
-Sample size:
-```{r}
-table(data$YEAR[data$city == "Louisville"])
-```
-
-
-
-
-
 
 
 
