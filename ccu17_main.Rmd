@@ -148,12 +148,21 @@ mpi_msa <- mpi_msa %>%
 
 ```
 
-A dichotomous variable for if anyone in the household has an associate's degree or higher
+Family unemployment is also assigned at the household level, with unemployment used as an indicator for whether anyone in the family is looking for work.
+```{r}
+mpi_msa$unemployed <- NA
+mpi_msa$unemployed[mpi_msa$EMPSTAT == 2] <- 1
+
+mpi_msa <- mpi_msa %>% 
+  group_by(SERIAL, YEAR) %>%
+  mutate(hh_unemployment = if_else(any(unemployed == 1, na.rm = TRUE), 1, 0))
+```
+
+A dichotomous variable for if anyone in the household has an associate degree or higher
 ```{r education, message = FALSE}
 mpi_msa = mpi_msa %>%
   group_by(SERIAL, YEAR) %>%
   mutate(fam_edu = if_else(any(EDUCD > 80), 0, 1))
-
 ```
 
 A dichotomous variable for if anyone in the household has a high school degree or higher
@@ -214,8 +223,8 @@ mpi_msa$OWNCOST[mpi_msa$OWNCOST == 99999] <- NA
 mpi_msa$FTOTINC[mpi_msa$FTOTINC == 99999] <- NA
 
 mpi_msa$hcost <- apply(mpi_msa[ ,c("OWNCOST", "RENTGRS")], 1, max, na.rm = TRUE)
-mpi_msa$hcost_dep <- if_else(mpi_msa$hcost*12/mpi_msa$FTOTINC > .50, 1, 0) # HUD uses 50% as severe cost burdened
-mpi_msa$hcost_dep[is.na(mpi_msa$hcost_dep)] <- 0
+mpi_msa$hcost_burdened <- if_else(mpi_msa$hcost*12/mpi_msa$FTOTINC > .50, 1, 0) # HUD uses 50% as severe cost burdened
+mpi_msa$hcost_burdened[is.na(mpi_msa$hcost_burdened)] <- 0
 
 mpi_msa$rent <- if_else(mpi_msa$RENTGRS > 0 & is.na(mpi_msa$OWNCOST), 1, 0) 
 
@@ -252,6 +261,41 @@ mpi_hhold <- subset(mpi_msa, !duplicated(SERIAL))
 `%!in%` <- negate(`%in%`)
 ```
 
+#Tenure analysis
+The percent of children who moved homes in the past year was added after the original statistics were produced, so the data comes from a separate download.
+
+Read in data
+```{r}
+housing_data <- read_feather("data/peer_housing_micro.feather")
+```
+
+This is the data used to trim the original housing data set. semi_join returns all rows of the first dataframe where there are matches in the second.
+```{r, eval = FALSE}
+housing_data <- semi_join(housing_data, mpi_msa, by = c("YEAR", "DATANUM", "SERIAL", "PERNUM"))
+```
+
+Add housing data to the mpi_msa dataframe
+```{r}
+housing_data <- housing_data %>%
+  select(DATANUM, SERIAL, PERNUM, MIGRATE1, MOVEDIN)
+
+mpi_msa <- full_join(mpi_msa, housing_data, cy = c("DATANUM", "SERIAL", "PERNUM"))
+```
+
+MOVEDIN is the number of years since the occupant moved into the residence. It is 0 for members of the family that are not the head of the household, so the value for the head of household is applied to other family members. 
+A value of 1 is assigned if the child's family has moved in the last year, otherwise it is 0.
+
+```{r}
+mpi_msa <- mpi_msa %>% 
+  group_by(YEAR, SERIAL) %>%
+  mutate(year_moved = max(MOVEDIN))
+
+mpi_msa$moved <- if_else(mpi_msa$MIGRATE1 == 1, 0, 1)
+mpi_msa$moved[mpi_msa$MIGRATE1 == 0] <- NA
+mpi_msa$moved[mpi_msa$year_moved == 1] <- 1
+```
+
+
 Setting up survey objects of both individuals and households for current peer cities
 ```{r}
 mpi_msa_current <- mpi_msa %>% 
@@ -276,13 +320,25 @@ mpi_hhold_svy_ch_wp <- subset(mpi_hhold_svy_ch_pov, fam_emp == 1)
 ```
 
 Start adding svyby data here and then later merge all of those tables together before graphing. 
-```{r}
+```{r, message = FALSE}
 mpi_lou_hhold_svy_ch_pov <- subset(mpi_hhold_svy_ch_pov, city == "Louisville")
+
+ch_pov_df <- svyby(~income_poverty, ~city, design = mpi_msa_svy_ch, svymean, na.rm = TRUE) %>% select(-se)
 
 income_ch_pov_df <- svyby(~FTOTINC, ~city, design = mpi_msa_svy_ch_pov, svyquantile, quantiles = .5, ci = TRUE, na.rm = TRUE)
 
-hcost_ch_pov_df <- svyby(~hcost_dep, ~city, design = mpi_msa_svy_ch_pov, svymean, na.rm = TRUE)
-hcost_ch_pov_and_no_pov_df <- svyby(~hcost_dep, ~city+income_poverty, design = mpi_msa_svy_ch, svymean, na.rm = TRUE)
+unemp_svy_pov_df <- svyby(~hh_unemployment, ~city, design = mpi_hhold_svy_ch_pov, svymean, na.rm = TRUE) %>%
+  select(city, hh_unemployment_pov = hh_unemployment)
+
+unemp_svy_no_pov_df <- svyby(~hh_unemployment, ~city, design = mpi_hhold_svy_ch_no_pov, svymean, na.rm = TRUE) %>%
+  select(city, hh_unemployment_no_pov = hh_unemployment)
+
+emp_svy_df <- svyby(~fam_emp, ~city, design = mpi_hhold_svy_ch_pov, svymean, na.rm = TRUE) %>%
+  mutate(pct_emp = 1 - fam_emp) %>%
+  select(city, pct_emp)
+
+hcost_ch_pov_df <- svyby(~hcost_burdened, ~city, design = mpi_msa_svy_ch_pov, svymean, na.rm = TRUE)
+hcost_ch_pov_and_no_pov_df <- svyby(~hcost_burdened, ~city+income_poverty, design = mpi_msa_svy_ch, svymean, na.rm = TRUE)
 
 hcost_per_ch_df <- svyby(~percent_housing, ~city+income_poverty, design = mpi_hhold_svy_ch, svyquantile, quantiles = .5, ci = TRUE, na.rm = TRUE)
 hcost_per_ch_df <- hcost_per_ch_df %>%
@@ -305,10 +361,18 @@ educ_ch_pov_df <- educ_ch_pov_df %>%
   rename(poor_no_assoc = `1`, not_poor_no_assoc = `0`)
 
 educ_no_hs_ch_pov_df <- svyby(~fam_no_hs_edu, ~city+income_poverty, design = mpi_msa_svy_ch, svymean) 
+
+educ_no_hsdf <- svyby(~fam_no_hs_edu, ~city+income_poverty, design = mpi_msa_svy_ch, svymean)
+
 educ_no_hs_ch_pov_df <- educ_no_hs_ch_pov_df %>%
   select(city, income_poverty, fam_no_hs_edu) %>%
   spread(key = income_poverty, value = fam_no_hs_edu) %>%
   rename(poor_no_hs = `1`, not_poor_no_hs = `0`)
+
+housing_svy_df <- svyby(~moved, ~city+income_poverty, design = mpi_msa_svy_ch, svymean, na.rm = TRUE)%>%
+  select(city, income_poverty, moved) %>%
+  spread(key = income_poverty, value = moved) %>%
+  rename(poor_moved = `1`, not_poor_moved = `0`)
 
 ```
 
@@ -316,18 +380,24 @@ Merging into just one dataframe
 ```{r}
 graph_df <- left_join(income_ch_pov_df, income_hhold_ch_pov_df, by = "city")
 graph_df <- left_join(graph_df, income_hhold_pov_df, by = "city")
+graph_df <- left_join(graph_df, unemp_svy_pov_df, by = "city")
+graph_df <- left_join(graph_df, unemp_svy_no_pov_df, by = "city")
 graph_df <- left_join(graph_df, educ_ch_pov_df, by = "city")
 graph_df <- left_join(graph_df, educ_no_hs_ch_pov_df, by = "city")
 graph_df <- left_join(graph_df, hcost_ch_pov_df, by = "city")
 graph_df <- left_join(graph_df, hcost_per_ch_df, by = "city")
+graph_df <- left_join(graph_df, housing_svy_df, by = "city")
+graph_df <- left_join(graph_df, emp_svy_df, by = "city")
+
+graph_df <- graph_df %>% select(-se.x, -se.y, -se.x.x, -se.y.y, -FTOTINC)
 
 rescale <- function(x){new_value <- x*100}
-graph_df[ ,c(8:15)] = apply(graph_df[ ,c(8:15)], 2, rescale)
+graph_df[ ,c(3:12, 14:16)] = apply(graph_df[ ,c(3:12, 14:16)], 2, rescale)
 ```
 
 ```{r rank graph function}
 rank_and_nb_group<-function(df, var, order="Descending",
-                            plot_title="", y_title = "Percent", caption_text = "",
+                            plot_title="", subtitle = "", y_title = "Percent", caption_text = "",
                             sigfig = 3, num_dec = 1, text = TRUE, h_line = FALSE){
   df$var <- df[[var]]
   if(order=="Descending"){
