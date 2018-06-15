@@ -3,8 +3,6 @@ title: "CCU17"
 output: github_document
 ---
 
-# Using ACS Microdata
-
 Loading libraries
 ```{r libraries, message = FALSE}
 library(ggthemes)
@@ -58,11 +56,32 @@ pull_peers_FIPS <- function(dat){
 }
 ```
 
-Reading in data
-```{r}
-mpi_msa <- read_feather("data/peer_acs_micro.feather")
-```
+Data to read in an IPUMS download containing all ACS data since 2010. The package bigmemory uses storage space on a hard drive rather than RAM to store the original file before it is subset to peer cities.
+```{r, eval = FALSE}
+#read the file into memory
+library(bigmemory)
+data <- read.big.matrix('Original Data/usa_00029.csv', header = TRUE)
 
+#create a logical vector indicating the positions of observations in peer MSAs
+MSA_col <- data[,6]
+MSA_lgl <- MSA_col %in% c(24340, 41180, 36420, 46140, 24860, 28940, 13820, 31140, 26900, 28140, 36540, 24660, 16740, 18140, 17140, 34980, 32820, 27260, 39580, 19380, 40060)
+
+#create a logical vector indicating the positions of TULSA observations (discussed below)
+PUMA_col  <- data[,7]
+state_col <- data[,5]
+PUMA_col_lgl <- PUMA_col %in% c(100, 1201, 1202, 1203, 1204, 1301, 1302, 1501, 1601,
+                                1100, 1200, 1000, 900, 600, 800)
+state_col_lgl <- state_col == 40
+Tulsa_lgl <- PUMA_col_lgl & state_col_lgl
+
+#combine the logical vectors and create a data frme in memory consisting of peer city observations
+all_obs <- MSA_lgl | Tulsa_lgl
+output <- data[all_obs,]
+output <- as.data.frame(output)
+
+#write the output to a file
+write_feather(output, "data/all_obs.feather")  
+```
 
 ## Code used to cut down dataset
 
@@ -70,15 +89,15 @@ The initial data comes from an IPUMS download which covers the whole U.S. I incl
 
 Giving TULSA PUMAs the TULSA MSA. TULSA's PUMAs are not a 90%+ match for the TULSA MSA, so IPUMS does not include them. However, for the sake of our analysis we'll accept the geographical imprecision. The area included is larger than the TULSA MSA. 
 ```{r, eval = FALSE}
-mpi_msa$MET2013[mpi_msa$PUMA == 100]  <- 46140
-mpi_msa$MET2013[mpi_msa$PUMA == 1201] <- 46140
-mpi_msa$MET2013[mpi_msa$PUMA == 1202] <- 46140
-mpi_msa$MET2013[mpi_msa$PUMA == 1203] <- 46140
-mpi_msa$MET2013[mpi_msa$PUMA == 1204] <- 46140
-mpi_msa$MET2013[mpi_msa$PUMA == 1301] <- 46140
-mpi_msa$MET2013[mpi_msa$PUMA == 1302] <- 46140
-mpi_msa$MET2013[mpi_msa$PUMA == 1501] <- 46140
-mpi_msa$MET2013[mpi_msa$PUMA == 1601] <- 46140
+mpi_msa$MET2013[mpi_msa$PUMA == 100]  <- 46140 
+mpi_msa$MET2013[mpi_msa$PUMA == 1201] <- 46140 
+mpi_msa$MET2013[mpi_msa$PUMA == 1202] <- 46140 
+mpi_msa$MET2013[mpi_msa$PUMA == 1203] <- 46140 
+mpi_msa$MET2013[mpi_msa$PUMA == 1204] <- 46140 
+mpi_msa$MET2013[mpi_msa$PUMA == 1301] <- 46140 
+mpi_msa$MET2013[mpi_msa$PUMA == 1302] <- 46140 
+mpi_msa$MET2013[mpi_msa$PUMA == 1501] <- 46140 
+mpi_msa$MET2013[mpi_msa$PUMA == 1601] <- 46140 
 ```
 
 Only Peer cities and only individuals not in group quarters (this is a normal exclusion made by factfinder as well). I am also cutting to just 2015, as the other two years aren't used. 
@@ -88,10 +107,20 @@ mpi_msa <- pull_peers_MSA(mpi_msa)
 mpi_msa <- mpi_msa %>% filter((GQ == 1 | GQ == 2) & YEAR == 2015)
 ```
 
+Reading in data
+```{r}
+#mpi_msa <- read_feather("data/peer_acs_micro.feather")
+mpi_msa <- read_feather("data/all_obs.feather")
+```
+
 ## Microdata analysis
 
 Matching FIPS numbers to recognizable names. 
 ```{r}
+mpi_msa <- mpi_msa %>% rename(MSA = MET2013)
+mpi_msa <- pull_peers_MSA(mpi_msa)
+mpi_msa <- mpi_msa %>% filter(GQ == 1 | GQ == 2)
+
 mpi_msa$city<-NA
 mpi_msa$city[mpi_msa$MSA == 24340] = "Grand Rapids"
 mpi_msa$city[mpi_msa$MSA == 41180] = "St. Louis"
@@ -240,11 +269,6 @@ Internet access is assigned at the household level. A household is considered de
 ```{r internet}
 mpi_msa$computer_internet <- if_else(mpi_msa$CINETHH == 3|(mpi_msa$CILAPTOP == 2 & mpi_msa$CIHAND == 2 & mpi_msa$CIOTHCOMP == 2), 1, 0)
 
-```
-
-Setting transit time of 0 to NA for later calculations
-```{r transit time}
-mpi_msa$TRANTIME[mpi_msa$TRANTIME == 0] <- NA
 ```
 
 And indicator variable for if the family is both in poverty and has at least one person working.
